@@ -23,6 +23,17 @@ def modulated_deform_conv__torchscript(input, offset, mask, weight, bias,
     with_bias = bias is not None
     if not with_bias:
         bias = input.new_empty(0)
+    # When pytorch version >= 1.6.0, amp is adopted for fp16 mode;
+    # amp won't cast the type of model (float32), but "offset" is cast
+    # to float16 by nn.Conv2d automatically, leading to the type
+    # mismatch with input (when it is float32) or weight.
+    # The flag for whether to use fp16 or amp is the type of "offset",
+    # we cast weight and input to temporarily support fp16 and amp
+    # whatever the pytorch version is.
+    input = input.type_as(offset)
+    weight = weight.type_as(input)
+    bias = bias.type_as(input)  # type: ignore
+    mask = mask.type_as(input)
     return torch.ops.mmdeploy.modulated_deform_conv(
         input, weight, bias, offset, mask, kernel_h, kernel_w, stride[1],
         stride[0], padding[1], padding[0], dilation[1], dilation[0], groups,
